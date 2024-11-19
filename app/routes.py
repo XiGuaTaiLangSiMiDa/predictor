@@ -20,14 +20,31 @@ def predict():
         # First fetch historical data
         historical_data = predictor.fetch_historical_data()
         if historical_data is None:
+            app.logger.error("Failed to fetch historical data")
             return jsonify({
                 'success': False,
-                'error': 'Failed to fetch historical data'
+                'error': 'Failed to fetch historical data from exchange'
+            })
+
+        if historical_data.empty:
+            app.logger.error("Historical data is empty")
+            return jsonify({
+                'success': False,
+                'error': 'No historical data available for this token'
             })
 
         # Generate predictions
-        predictions, historical_data = predictor.generate_predictions()
-        if predictions is None:
+        try:
+            predictions, historical_data = predictor.generate_predictions()
+        except Exception as pred_error:
+            app.logger.error(f"Prediction generation error: {str(pred_error)}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to generate predictions: {str(pred_error)}'
+            })
+
+        if predictions is None or predictions.empty:
+            app.logger.error("No predictions generated")
             return jsonify({
                 'success': False,
                 'error': 'Failed to generate predictions'
@@ -41,6 +58,8 @@ def predict():
         # Generate plot
         try:
             predictor.plot_predictions(predictions, historical_data, plot_path)
+            if not os.path.exists(plot_path):
+                raise Exception("Plot file was not created")
         except Exception as plot_error:
             app.logger.error(f"Plot error: {str(plot_error)}")
             return jsonify({
@@ -49,21 +68,33 @@ def predict():
             })
 
         # Prepare prediction data
-        prediction_data = []
-        for date, row in predictions.iterrows():
-            prediction_data.append({
-                'date': date.strftime('%Y-%m-%d'),
-                'price': f"{row['ensemble']:.4f}"
+        try:
+            prediction_data = []
+            for date, row in predictions.iterrows():
+                prediction_data.append({
+                    'date': date.strftime('%Y-%m-%d'),
+                    'price': f"{row['ensemble']:.4f}"
+                })
+            
+            if not prediction_data:
+                raise Exception("No prediction data generated")
+
+            # Return response with plot_url matching the HTML expectation
+            response_data = {
+                'success': True,
+                'predictions': prediction_data,
+                'plot_url': f'/static/plots/{plot_filename}'
+            }
+            app.logger.info(f"Successfully generated predictions for {token}")
+            return jsonify(response_data)
+        except Exception as format_error:
+            app.logger.error(f"Data formatting error: {str(format_error)}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to format prediction data: {str(format_error)}'
             })
-        
-        # Return response with plot_url matching the HTML expectation
-        return jsonify({
-            'success': True,
-            'predictions': prediction_data,
-            'plot_url': f'/static/plots/{plot_filename}'
-        })
     except Exception as e:
-        app.logger.error(f"Prediction error: {str(e)}")
+        app.logger.error(f"Unexpected error in predict endpoint: {str(e)}")
         return jsonify({
             'success': False,
             'error': f'Prediction failed: {str(e)}'
