@@ -9,7 +9,7 @@ def index():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    token = request.form.get('token', 'PNUT')
+    token = request.form.get('token', 'GMT')
     pair = f"{token}/USDT"
     
     predictor = CryptoPredictor()

@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore')
 class CryptoPredictor:
     def __init__(self):
         self.exchange = ccxt.binance()
-        self.symbol = 'PNUT/USDT'
+        self.symbol = 'GMT/USDT'
         self.scaler = MinMaxScaler()
         
     def fetch_historical_data(self):

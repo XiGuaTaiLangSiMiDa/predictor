@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore')
 class CryptoPredictor:
     def __init__(self):
         self.exchange = ccxt.binance()
-        self.symbol = 'PNUT/USDT'
+        self.symbol = 'GMT/USDT'
         self.scaler = MinMaxScaler()
         
     def fetch_historical_data(self):
@@ -176,7 +176,7 @@ class CryptoPredictor:
                         alpha=0.2,
                         color='red')
         
-        plt.title('PNUT/USDT Price Prediction (30 Days)', fontsize=14)
+        plt.title('GMT/USDT Price Prediction (30 Days)', fontsize=14)
         plt.xlabel('Date', fontsize=12)
         plt.ylabel('Price (USDT)', fontsize=12)
         plt.legend(fontsize=12)
@@ -195,7 +195,7 @@ def main():
         if predictions is not None:
             predictor.plot_predictions(predictions, historical_data)
             
-            print("\nPNUT/USDT Price Predictions for Next 30 Days:")
+            print("\nGMT/USDT Price Predictions for Next 30 Days:")
             print("==========================================")
             for date, row in predictions.iterrows():
                 print(f"{date.strftime('%Y-%m-%d')}: {row['ensemble']:.4f} USDT")
