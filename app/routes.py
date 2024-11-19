@@ -2,6 +2,7 @@ import os
 from flask import render_template, request, jsonify, send_file
 from app import app
 from app.models.predictor import CryptoPredictor
+from datetime import datetime
 
 @app.route('/')
 def index():
@@ -16,28 +17,53 @@ def predict():
     predictor.symbol = pair
     
     try:
-        predictions, historical_data = predictor.generate_predictions()
-        if predictions is not None:
-            plot_path = os.path.join(app.root_path, 'static', 'plots', f'{token.lower()}_prediction.png')
-            os.makedirs(os.path.dirname(plot_path), exist_ok=True)
-            predictor.plot_predictions(predictions, historical_data, plot_path)
-            
-            prediction_data = []
-            for date, row in predictions.iterrows():
-                prediction_data.append({
-                    'date': date.strftime('%Y-%m-%d'),
-                    'price': f"{row['ensemble']:.4f}"
-                })
-            
+        # First fetch historical data
+        historical_data = predictor.fetch_historical_data()
+        if historical_data is None:
             return jsonify({
-                'success': True,
-                'predictions': prediction_data,
-                'plot_url': f'/static/plots/{token.lower()}_prediction.png'
+                'success': False,
+                'error': 'Failed to fetch historical data'
             })
+
+        # Generate predictions
+        predictions, historical_data = predictor.generate_predictions()
+        if predictions is None:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to generate predictions'
+            })
+
+        # Create plots directory if it doesn't exist
+        plot_path = os.path.join(app.root_path, 'static', 'plots', f'{token.lower()}_prediction.png')
+        os.makedirs(os.path.dirname(plot_path), exist_ok=True)
+        
+        # Generate plot
+        try:
+            predictor.plot_predictions(predictions, historical_data, plot_path)
+        except Exception as plot_error:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to generate plot: {str(plot_error)}'
+            })
+
+        # Prepare prediction data
+        prediction_data = []
+        for date, row in predictions.iterrows():
+            prediction_data.append({
+                'date': date.strftime('%Y-%m-%d'),
+                'price': f"{row['ensemble']:.4f}"
+            })
+        
+        return jsonify({
+            'success': True,
+            'predictions': prediction_data,
+            'plot_url': f'/static/plots/{token.lower()}_prediction.png'
+        })
     except Exception as e:
+        app.logger.error(f"Prediction error: {str(e)}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': f'Prediction failed: {str(e)}'
         })
 
 @app.route('/health')
