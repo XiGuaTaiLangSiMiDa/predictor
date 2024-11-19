@@ -34,13 +34,15 @@ def predict():
             })
 
         # Create plots directory if it doesn't exist
-        plot_path = os.path.join(app.root_path, 'static', 'plots', f'{token.lower()}_prediction.png')
+        plot_filename = f'{token.lower()}_prediction.png'
+        plot_path = os.path.join(app.root_path, 'static', 'plots', plot_filename)
         os.makedirs(os.path.dirname(plot_path), exist_ok=True)
         
         # Generate plot
         try:
             predictor.plot_predictions(predictions, historical_data, plot_path)
         except Exception as plot_error:
+            app.logger.error(f"Plot error: {str(plot_error)}")
             return jsonify({
                 'success': False,
                 'error': f'Failed to generate plot: {str(plot_error)}'
@@ -54,10 +56,11 @@ def predict():
                 'price': f"{row['ensemble']:.4f}"
             })
         
+        # Return response with plot_url matching the HTML expectation
         return jsonify({
             'success': True,
             'predictions': prediction_data,
-            'plot_url': f'/static/plots/{token.lower()}_prediction.png'
+            'plot_url': f'/static/plots/{plot_filename}'
         })
     except Exception as e:
         app.logger.error(f"Prediction error: {str(e)}")
