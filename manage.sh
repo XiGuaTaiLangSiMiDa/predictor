@@ -1,96 +1,116 @@
 #!/bin/bash
 
-# Activate virtual environment
-source venv/bin/activate
+# Function to check if virtual environment exists
+check_venv() {
+    if [ ! -d "venv" ]; then
+        echo "Virtual environment not found. Creating one..."
+        python3 -m venv venv
+    fi
+}
 
-SUPERVISOR_PID_FILE="/Users/yafan/workspace/tql/supervisord.pid"
-SOCK_FILE="/tmp/supervisor.sock"
+# Function to activate virtual environment
+activate_venv() {
+    source venv/bin/activate
+}
 
-cleanup() {
-    # Kill any existing supervisord process
-    if [ -f "$SUPERVISOR_PID_FILE" ]; then
-        pid=$(cat "$SUPERVISOR_PID_FILE")
-        if ps -p $pid > /dev/null; then
-            kill $pid
+# Function to install dependencies
+install_deps() {
+    echo "Installing dependencies..."
+    pip install -r requirements.txt
+}
+
+# Function to create necessary directories
+create_dirs() {
+    mkdir -p logs
+    mkdir -p app/static/plots
+    chmod 777 app/static/plots
+}
+
+# Function to check server status
+check_status() {
+    if [ -f logs/server.pid ]; then
+        PID=$(cat logs/server.pid)
+        if ps -p $PID > /dev/null; then
+            echo "Server is running (PID: $PID)"
+            echo "Process info:"
+            ps -p $PID -o pid,ppid,user,%cpu,%mem,start,time,command
+            echo -e "\nListening ports:"
+            lsof -i :5000 | grep LISTEN
+            echo -e "\nLast 5 log entries:"
+            tail -n 5 logs/server.log
+        else
+            echo "Server not running (stale PID file found)"
+            rm logs/server.pid
         fi
-        rm -f "$SUPERVISOR_PID_FILE"
-    fi
-    
-    # Remove socket file if it exists
-    if [ -S "$SOCK_FILE" ]; then
-        rm -f "$SOCK_FILE"
-    fi
-    
-    # Kill any remaining gunicorn processes
-    pkill -f "gunicorn"
-}
-
-check_process() {
-    if [ -f "$SUPERVISOR_PID_FILE" ] && ps -p $(cat "$SUPERVISOR_PID_FILE") > /dev/null; then
-        return 0
     else
-        return 1
+        echo "Server not running"
     fi
-}
-
-start_supervisor() {
-    supervisord -c supervisor.conf
-    sleep 2  # Give supervisord time to start
 }
 
 case "$1" in
     "start")
-        echo "Starting crypto predictor server..."
-        if check_process; then
-            echo "Server is already running. Use 'restart' to restart it or 'status' to check its status."
-        else
-            cleanup
-            start_supervisor
-            supervisorctl -c supervisor.conf start crypto_predictor
-            echo "Server started successfully."
+        if [ -f logs/server.pid ]; then
+            echo "Server already running (PID: $(cat logs/server.pid))"
+            exit 1
         fi
+        check_venv
+        activate_venv
+        create_dirs
+        echo "Starting server..."
+        FLASK_DEBUG=1 python3 -m flask run --host=0.0.0.0 --port=5000 >> logs/server.log 2>&1 &
+        echo $! > logs/server.pid
+        echo "Server started. PID: $(cat logs/server.pid)"
+        sleep 2
+        check_status
         ;;
+        
     "stop")
-        echo "Stopping crypto predictor server..."
-        if check_process; then
-            supervisorctl -c supervisor.conf stop crypto_predictor
-            supervisorctl -c supervisor.conf shutdown
-            cleanup
-            echo "Server stopped successfully."
+        if [ -f logs/server.pid ]; then
+            echo "Stopping server..."
+            kill $(cat logs/server.pid)
+            rm logs/server.pid
+            echo "Server stopped"
         else
-            cleanup
-            echo "Server was not running, cleaned up any remaining processes."
+            echo "Server not running"
         fi
         ;;
+        
     "restart")
-        echo "Restarting crypto predictor server..."
         $0 stop
         sleep 2
         $0 start
         ;;
+
     "status")
-        if ! check_process; then
-            echo "Server is not running."
+        check_status
+        ;;
+        
+    "log")
+        if [ "$2" = "error" ]; then
+            echo "Showing error logs (Ctrl+C to exit):"
+            tail -f logs/app.log
         else
-            echo "Server status:"
-            supervisorctl -c supervisor.conf status
+            echo "Showing server logs (Ctrl+C to exit):"
+            tail -f logs/server.log
         fi
         ;;
-    "logs")
-        echo "Showing crypto predictor server logs..."
-        if [ -f "crypto_predictor.out.log" ]; then
-            tail -f crypto_predictor.out.log
-        else
-            echo "Log file not found. Make sure the server has been started at least once."
-        fi
-        ;;
+        
     "install")
-        echo "Installing dependencies..."
-        pip install -r requirements.txt
-        pip install supervisor
+        check_venv
+        activate_venv
+        install_deps
+        create_dirs
+        echo "Installation complete"
         ;;
+        
     *)
-        echo "Usage: $0 {start|stop|restart|status|logs|install}"
+        echo "Usage: $0 {start|stop|restart|status|log|install}"
+        echo "  start   : Start the server"
+        echo "  stop    : Stop the server"
+        echo "  restart : Restart the server"
+        echo "  status  : Check server status"
+        echo "  log     : View server logs (use 'log error' for error logs)"
+        echo "  install : Install dependencies and set up environment"
         exit 1
         ;;
 esac
