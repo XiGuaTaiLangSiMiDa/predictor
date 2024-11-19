@@ -104,7 +104,7 @@
     </div>
 
     <script>
-        function predict() {
+        async function predict() {
             const token = document.getElementById('token').value;
             const loading = document.getElementById('loading');
             const plot = document.getElementById('plot');
@@ -121,12 +121,21 @@
             const formData = new FormData();
             formData.append('token', token);
             
-            fetch('/predict', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
+            try {
+                // Create AbortController for timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 300000); // 300 seconds (3x typical 20s)
+                
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                const data = await response.json();
+                
                 if (data.success) {
                     plot.src = data.plot_url + '?_=' + new Date().getTime();
                     plot.style.display = 'block';
@@ -142,14 +151,16 @@
                 } else {
                     error.textContent = 'Failed to generate predictions: ' + data.error;
                 }
-            })
-            .catch(err => {
-                error.textContent = 'Error: ' + err.message;
-            })
-            .finally(() => {
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    error.textContent = 'Request timed out after 60 seconds';
+                } else {
+                    error.textContent = 'Error: ' + err.message;
+                }
+            } finally {
                 loading.style.display = 'none';
                 predictBtn.disabled = false;
-            });
+            }
         }
     </script>
 </body>
