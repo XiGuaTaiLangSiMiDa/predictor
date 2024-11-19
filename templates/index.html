@@ -110,7 +110,7 @@
             try {
                 // Create AbortController for timeout
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 60000); // 30 seconds (3x typical 10s)
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds (3x typical 20s)
                 
                 const response = await fetch('/predict', {
                     method: 'POST',
@@ -141,7 +141,7 @@
                 }
             } catch (error) {
                 if (error.name === 'AbortError') {
-                    alert('Request timed out after 30 seconds');
+                    alert('Request timed out after 60 seconds');
                 } else {
                     alert('Error: ' + error);
                 }
