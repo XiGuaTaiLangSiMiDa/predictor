@@ -94,7 +94,7 @@
     </div>
 
     <script>
-        function predict() {
+        async function predict() {
             const token = document.getElementById('token').value;
             const loading = document.getElementById('loading');
             const plot = document.getElementById('plot');
@@ -107,12 +107,21 @@
             const formData = new FormData();
             formData.append('token', token);
             
-            fetch('/predict', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
+            try {
+                // Create AbortController for timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 30 seconds (3x typical 10s)
+                
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                const data = await response.json();
+                
                 if (data.success) {
                     // Update plot with random parameter to prevent caching
                     plot.src = `/plot?_=${new Date().getTime()}`;
@@ -130,13 +139,15 @@
                 } else {
                     alert('Failed to generate predictions: ' + data.error);
                 }
-            })
-            .catch(error => {
-                alert('Error: ' + error);
-            })
-            .finally(() => {
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    alert('Request timed out after 30 seconds');
+                } else {
+                    alert('Error: ' + error);
+                }
+            } finally {
                 loading.style.display = 'none';
-            });
+            }
         }
     </script>
 </body>
